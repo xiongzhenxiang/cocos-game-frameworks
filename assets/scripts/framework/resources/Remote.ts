@@ -3,12 +3,12 @@ import { Loader, ResLoadReturnType, ResPreloadReturnType } from "./Loader";
 
 
 /**
- * 远程资源加载类
+ * 处理 bundle 为 "remote" 的请求。以完整 URL 和请求类型为键，复用 Loader 的缓存与释放流程。
  */
 export class Remote extends Loader {
 
     /**
-     * Cocos 远程获取函数封装
+     * 把请求类型映射为引擎的 ext 参数，帮助引擎选择文件处理器。例如 cc.Texture2D 对应 .png。
      */
     protected _load<T extends cc.Asset>(url: string, type: AssetClass<T>): Promise<ResLoadReturnType<T>> {
         return new Promise((resolve) => {
@@ -38,7 +38,7 @@ export class Remote extends Loader {
 
 
 /**
- * 对应资源类转为 Ext Option
+ * 这里配置的是文件扩展名。loadRemote 最终返回的对象由 Cocos 对应的文件处理器创建。
  */
 export function type2Ext(type: AssetClass<cc.Asset>): string {
     switch (type) {

@@ -2,6 +2,7 @@ import { AssetClass, sleep } from "./ResourceTypes";
 import { Loader, ResLoadOpt, ResLoadReturnType, ResPreloadOpt, ResPreloadReturnType } from "./Loader";
 import type { DirInfo } from "./ResManager";
 
+/** 将包内路径交给 Cocos Bundle 读取，缓存和使用次数由继承的 Loader 管理。 */
 export class Bundle extends Loader {
 
     /**
@@ -53,7 +54,7 @@ export class Bundle extends Loader {
 
 
     /**
-     * 加载目录下所有指定类型资源
+     * 默认给目录加载成功后返回的每个资源各记一次引用，之后可以按实例逐项交还。
      */
     loadDir<T extends cc.Asset>(dir_path: DirPath, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
     loadDir<T extends cc.Asset>(r_dir: DirInfo, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
@@ -159,6 +160,7 @@ export class Bundle extends Loader {
                 let onComplete = (err: Error, assets: T[]) => {
                     if (!err) {
                         for (const asset of assets) {
+                            // 目录请求只提供文件夹路径。用 UUID 查出每项的包内路径和类型，使单项请求也能命中缓存。
                             let info = bundle.getAssetInfo((asset as T & { _uuid: string })._uuid) as CocosAssetInfo<T>;
                             let url = info.path;
                             this.isCached(url, info.ctor) || this.setCached(url, info.ctor, asset);
@@ -209,6 +211,7 @@ export class Bundle extends Loader {
             if (this.bundle) {
                 this.bundle.load(url, type as unknown as typeof cc.Asset, (err, asset: T) => {
                     if (!err) {
+                        // 等待引擎回调期间，另一请求可能已缓存同一资源。再次检查可避免重复增加引擎引用。
                         this.isCached(url, type) || this.setCached(url, type, asset);
                     }
                     resolve({ error: err, resource: asset });

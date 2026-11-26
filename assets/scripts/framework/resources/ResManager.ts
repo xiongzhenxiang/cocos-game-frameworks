@@ -5,7 +5,7 @@ import { Remote } from "./Remote";
 
 
 /**
- * 资源管理模块
+ * 根据请求的包名选择加载器。每个资源包有独立缓存，远程 URL 由 remote 加载器处理。
  */
 export class ResManager {
 
@@ -30,13 +30,13 @@ export class ResManager {
     internal?: Bundle;
 
     /**
-     * Bundle 集合
+     * 按引擎返回的包名缓存 Bundle 包装对象，后续访问同一个包时复用它的资源缓存。
      */
     bundles: Map<string, Bundle> = new Map();
 
 
     constructor() {
-        // built-in Bundles
+        // 引擎可能已经打开内置包。复用现有实例，使它们和自定义包使用同一个加载入口。
         if (cc.assetManager.resources) {
             this.resources = new Bundle().init(cc.assetManager.resources);
             this.bundles.set("resources", this.resources);
@@ -55,7 +55,7 @@ export class ResManager {
 
 
     /**
-     * 通用资源加载函数，支持直接指定加载 Bundle 中的资源，若 Bundle 未加载则会先加载 Bundle，Bundle 加载采用默认选项
+     * bundle 为 "remote" 时，url 是远程地址。其他请求先取得对应资源包，再按包内路径和类型加载。
      */
     async load<T extends cc.Asset>(r_res: ResRoute<T>, opt?: ResLoadOpt): Promise<ResLoadReturnType<T>> {
         if (!r_res) return { error: new Error("缺少资源路由"), resource: null };
@@ -75,7 +75,7 @@ export class ResManager {
 
 
     /**
-     * 通用资源预加载函数，支持直接指定加载 Bundle 中的资源，若 Bundle 未加载则会先加载 Bundle，Bundle 加载采用默认选项
+     * 提前获取文件，并把本次重试设置传给分包加载。返回的请求项可用于确认预加载结果。
      */
     async preload<T extends cc.Asset>(r_res: ResRoute<T>, opt?: ResLoadOpt): Promise<ResPreloadReturnType> {
         if (!r_res) return { error: new Error("缺少资源路由"), items: null };
@@ -94,7 +94,7 @@ export class ResManager {
 
 
     /**
-     * 加载目录下所有指定类型资源，若 Bundle 未加载则会先加载 Bundle，Bundle 加载采用默认选项
+     * 先取得资源包，再加载指定目录。省略类型时，引擎返回该目录下的各种资源。
      */
     loadDir<T extends cc.Asset>(dir_info: DirRoute, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
     loadDir<T extends cc.Asset>(r_dir: DirInfo, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
@@ -125,7 +125,7 @@ export class ResManager {
 
 
     /**
-     * 预加载目录下所有指定类型资源，若 Bundle 未加载则会先加载 Bundle，Bundle 加载采用默认选项
+     * 先取得资源包，再预加载目录中的文件。目录路径相对于该包。
      */
     preloadDir<T extends cc.Asset>(dir_info: DirRoute, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
     preloadDir<T extends cc.Asset>(r_dir: DirInfo, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
@@ -269,7 +269,8 @@ export class ResManager {
                 version: version,
             }, (err, assetbundle) => {
                 if (!err) {
-                    // 加载依赖 Bundle
+                    // 当前包可能引用其他包的素材。等依赖包全部可用后，再把当前包放入缓存。
+                    // 各包有各自的版本号，依赖包只继承重试设置。
                     if (assetbundle.deps.length !== 0) {
                         const promises = assetbundle.deps.map(v => this.loadBundle(v, opt ? { retry: opt.retry, retry_time: opt.retry_time } : undefined));
                         const results = Promise.all(promises);
@@ -329,7 +330,7 @@ export class ResManager {
 
 
     /**
-     * 释放某个 Bundle，会忽略计数直接释放所有包内资源并立即调用 GC，然后删除该 Bundle 实例，一般情况下请调用 releaseDir
+     * 卸载整个包前，清零包内资源的业务计数并交还缓存引用。单个面板关闭时应只交还它持有的资源。
      */
     releaseBundle(r_bundle: BundleRoute): void;
     releaseBundle(bundle: Bundle): void;
@@ -375,7 +376,7 @@ export class BundleLoadOpt {
     retry?: boolean;
 
     /**
-     * 重试间隔时间，默认为 500 毫秒
+     * Bundle 加载失败后的重试间隔，默认 5000 毫秒。
      */
     retry_time?: number;
 

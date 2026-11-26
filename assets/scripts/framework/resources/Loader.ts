@@ -1,17 +1,17 @@
 import { AssetClass, sleep } from "./ResourceTypes";
 
 /**
- * 资源加载基础类
+ * Bundle 和 Remote 共用的资源缓存。每个加载器分别记录自己缓存了哪些资源、每份资源被取用了几次。
  */
 export abstract class Loader {
 
     /**
-     * URL - 资源数据集合
+     * 先按类型、再按路径查找。同一路径的 Texture2D 和 SpriteFrame 各有一条缓存记录。
      */
     cached_map: Map<AssetClass<cc.Asset>, Map<string, AssetInfo>> = new Map();
 
     /**
-     * 资源实例 - 额外数据集合
+     * 按实例找到同一条缓存记录，方便使用者直接交还加载时取得的对象。
      */
     info_map: WeakMap<cc.Asset, AssetInfo> = new WeakMap();
 
@@ -33,7 +33,7 @@ export abstract class Loader {
         let result: ResPreloadReturnType;
 
         do {
-            // is cached
+            // 素材已在内存中，本次预加载无需再取文件，也不会增加使用次数。
             let info = this.isCached(url, type);
             if (info) {
                 return { error: null, items: [] };
@@ -47,7 +47,7 @@ export abstract class Loader {
 
 
     /**
-     * 加载资源
+     * 默认每次成功取用都登记一份业务引用，首次加载和缓存命中遵循同一规则。
      */
     async load<T extends cc.Asset>(res_path: ResPath<T>, opt?: ResLoadOpt): Promise<ResLoadReturnType<T>> {
         let retry = opt?.retry !== false;
@@ -64,7 +64,7 @@ export abstract class Loader {
         let result: ResLoadReturnType<T>;
 
         do {
-            // is cached
+            // 两个面板可以拿到同一张图。默认每次命中都增加使用次数，缓存仍只持有一份引擎引用。
             let info = this.isCached(url, type);
             if (info) {
                 if (ref) this.addRef(info.asset);
@@ -97,13 +97,13 @@ export abstract class Loader {
 
 
     /**
-     * 待实现资源加载函数，加载完成资源后必须调用 this.isCached 判断是否已缓存
+     * 子类向引擎发起文件预加载，返回请求项。使用者需要资源实例时再调用 load。
      */
     protected abstract _preload<T extends cc.Asset>(url: string, type: AssetClass<T>): Promise<ResPreloadReturnType>;
 
 
     /**
-     * 待实现资源预加载函数，加载完成资源后必须调用 this.isCached 判断是否已缓存，没有则调用 this.setCached 函数进行缓存
+     * 子类取得资源实例后再次检查缓存，首次入缓存时调用 setCached。
      */
     protected abstract _load<T extends cc.Asset>(url: string, type: AssetClass<T>): Promise<ResLoadReturnType<T>>;
 
@@ -122,7 +122,7 @@ export abstract class Loader {
 
 
     /**
-     * 设置资源已经缓存，并在 Cocos 引擎计数层增加计数
+     * 首次入缓存时，加载器通过 asset.addRef() 持有一份引擎引用。面板的使用次数另记在 AssetInfo.ref。
      */
     protected setCached(url: string, type: AssetClass<cc.Asset>, instane: cc.Asset) {
         let map = this.cached_map.get(type);
@@ -140,7 +140,7 @@ export abstract class Loader {
 
 
     /**
-     * 移除缓存资源，并在 Cocos 引擎计数层减少计数
+     * 移除两处索引，再用 asset.decRef() 交还缓存持有的引擎引用。引擎会检查是否还有其他持有者。
      */
     protected removeCache(url: string, type: AssetClass<cc.Asset>) {
         let map = this.cached_map.get(type);
@@ -168,7 +168,7 @@ export abstract class Loader {
 
 
     /**
-     * 对资源引用计数加 1
+     * 记录一次业务取用。两个面板分别取用同一张图时，info.ref 增加两次。
      */
     addRef(res: cc.Asset): void;
     addRef(res_path: ResPath<cc.Asset>): void;
@@ -182,7 +182,7 @@ export abstract class Loader {
 
 
     /**
-     * 对资源引用计数减 1
+     * 交还一次业务引用，最低减到零。
      */
     decRef(res: cc.Asset): void;
     decRef(res_path: ResPath<cc.Asset>): void;
@@ -210,9 +210,9 @@ export abstract class Loader {
 
 
     /**
-     * 对资源引用计数减 1，仅持续引用才需调用此接口
-     * @param force 直接把计数清零，默认 false
-     * @param imm 是否立即触发释放流程，默认为 false
+     * 交还一次业务引用。默认先保留缓存，之后可调用 gc 清理使用次数为零的资源。
+     * @param force 设为 true 会清零这份资源的全部业务引用，包括其他使用者的引用。
+     * @param imm 设为 true 会立即检查使用次数，归零才移出缓存。
      */
     release(res: cc.Asset, force?: boolean, imm?: boolean): void;
     release(res_path: ResPath<cc.Asset>, force?: boolean, imm?: boolean): void;
@@ -277,7 +277,7 @@ export abstract class Loader {
 
 
     /**
-     * 触发资源释放，所有没有引用计数的资源会被释放
+     * 扫描本加载器的缓存，交还使用次数已归零的资源。
      */
     gc() {
         for (const { 1: map } of this.cached_map) {
@@ -301,7 +301,7 @@ export class AssetInfo {
     url: string;
 
     /**
-     * 加载时传入的 URL
+     * 与 URL 共同构成缓存键的资源类型，例如 cc.SpriteFrame。
      */
     type: AssetClass<cc.Asset>;
 
@@ -311,7 +311,7 @@ export class AssetInfo {
     asset: cc.Asset;
 
     /**
-     * 引用次数
+     * 业务使用次数，初始为零。首次入缓存时取得的引擎引用单独由 cc.Asset 记录。
      */
     ref: number;
 

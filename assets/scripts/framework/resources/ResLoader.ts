@@ -6,7 +6,10 @@ import type { AssetClass } from "./ResourceTypes";
 type HeldAsset = { bundle: string; asset: cc.Asset };
 type OwnerGroups = Map<string, HeldAsset[]>;
 
-/** 按使用者记录动态加载的资源。Bundle 名称由调用方传入。 */
+/**
+ * 按使用者（target）记录动态加载的资源。需要分别清理的两个面板实例应使用不同的 target。
+ * 同一面板请求同一张图两次，就保存两条记录，关闭时才能交还两次引用。
+ */
 export class ResLoader {
     private readonly assets: OwnerGroups = new Map();
     private readonly directories: OwnerGroups = new Map();
@@ -23,6 +26,7 @@ export class ResLoader {
     private releaseGroup(groups: OwnerGroups, target: string, force: boolean, immediate: boolean): void {
         const held = groups.get(target);
         if (!held) return;
+        // 先移除旧分组。同名面板再次打开时会拿到新数组，尚未返回的请求仍关联旧数组。
         groups.delete(target);
         for (const { bundle, asset } of held) {
             res.release({ NAME: bundle }, asset, force, immediate);
@@ -39,6 +43,7 @@ export class ResLoader {
         return true;
     }
 
+    /** 开始加载时记住使用者，成功后登记实际返回的资源。ref 为 false 时跳过使用登记。 */
     async loadResToBundle<T extends cc.Asset>(bundle: string, url: string, type: AssetClass<T>, target: string, opt?: ResLoadOpt): Promise<ResLoadReturnType<T>> {
         const group = opt?.ref !== false ? this.group(this.assets, target) : null;
         const result = await res.load({ bundle, url, type }, opt);
@@ -58,6 +63,7 @@ export class ResLoader {
         return { error: results.find(result => result.error)?.error ?? null, resource: results.map(result => result.resource) };
     }
 
+    /** 按实际返回的资源逐项登记，稍后用 releaseDirToBundle 交还这一组目录请求。 */
     async loadDirToBundle<T extends cc.Asset>(bundle: string, path: string, type: AssetClass<T>, target: string, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>> {
         const group = opt?.ref !== false ? this.group(this.directories, target) : null;
         const result = await res.loadDir({ bundle, path }, type, opt);
@@ -87,6 +93,7 @@ export class ResLoader {
         return res.preloadDir({ bundle, path }, type, opt);
     }
 
+    /** 面板销毁时，用加载时的 target 交还单项和数组请求。默认逐次减引用，其他使用者仍可继续使用。 */
     releaseResToBundle(target: string, force = false, immediate = true): void {
         this.releaseGroup(this.assets, target, force, immediate);
     }
