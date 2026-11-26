@@ -3,7 +3,15 @@ import type { ResLoadDirReturnType, ResLoadOpt, ResLoadReturnType, ResPreloadRet
 import { res } from "./ResManager";
 import type { AssetClass } from "./ResourceTypes";
 
-type HeldAsset = { bundle: string; asset: cc.Asset };
+/** 一次成功取用的记录。同一张图取用两次，就保留两条记录。 */
+type HeldAsset = {
+    /** 资源所属的 bundle 名称。释放时用它找到原来的加载器。 */
+    bundle: string;
+    /** 这次加载实际返回的对象，例如一张 cc.SpriteFrame。释放时交还这个对象。 */
+    asset: cc.Asset;
+};
+
+/** 键是使用者标识 target，值是这个使用者需要交还的记录列表。 */
 type OwnerGroups = Map<string, HeldAsset[]>;
 
 /**
@@ -11,7 +19,10 @@ type OwnerGroups = Map<string, HeldAsset[]>;
  * 同一面板请求同一张图两次，就保存两条记录，关闭时才能交还两次引用。
  */
 export class ResLoader {
+    /** 单项和数组加载的登记表。按 target 查出已取用的资源，由 releaseResToBundle 逐条交还。 */
     private readonly assets: OwnerGroups = new Map();
+
+    /** 目录加载的登记表。按 target 保存目录加载实际返回的每项资源，由 releaseDirToBundle 逐条交还。 */
     private readonly directories: OwnerGroups = new Map();
 
     private group(groups: OwnerGroups, target: string): HeldAsset[] {
@@ -34,6 +45,7 @@ export class ResLoader {
     }
 
     private record(groups: OwnerGroups, target: string, group: HeldAsset[], bundle: string, assets: cc.Asset[]): boolean {
+        // group 是发起请求时的列表。参数 assets 是本次返回的资源数组，this.assets 则是整个单项与数组登记表。
         if (groups.get(target) !== group) {
             // 等待加载期间使用者已释放。归还本次引用，不交给同名的新使用者。
             for (const asset of assets) res.release({ NAME: bundle }, asset, false, true);

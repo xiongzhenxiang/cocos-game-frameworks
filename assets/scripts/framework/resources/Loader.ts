@@ -6,12 +6,12 @@ import { AssetClass, sleep } from "./ResourceTypes";
 export abstract class Loader {
 
     /**
-     * 先按类型、再按路径查找。同一路径的 Texture2D 和 SpriteFrame 各有一条缓存记录。
+     * 按资源类型、路径两级查找 AssetInfo。同一路径的 Texture2D 和 SpriteFrame 各有一条记录。
      */
     cached_map: Map<AssetClass<cc.Asset>, Map<string, AssetInfo>> = new Map();
 
     /**
-     * 按实例找到同一条缓存记录，方便使用者直接交还加载时取得的对象。
+     * 用资源实例反查同一条 AssetInfo。调用方按对象释放时，用这张表找到要减的业务计数。
      */
     info_map: WeakMap<cc.Asset, AssetInfo> = new WeakMap();
 

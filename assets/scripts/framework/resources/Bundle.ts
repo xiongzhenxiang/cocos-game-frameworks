@@ -6,12 +6,12 @@ import type { DirInfo } from "./ResManager";
 export class Bundle extends Loader {
 
     /**
-     * 对应 Cocos Asset Bundle 实例
+     * init 保存的 Cocos 引擎 bundle 对象。读取单项或目录时，通过它调用引擎的加载方法。
      */
     bundle?: cc.AssetManager.Bundle;
 
     /**
-     * Bundle Hash 值，为传入的值，若没传入该值则无效
+     * 打开这个 bundle 时传入的版本标识。未指定版本时为 undefined。
      */
     version?: string;
 

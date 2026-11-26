@@ -5,32 +5,32 @@ import { Remote } from "./Remote";
 
 
 /**
- * 根据请求的包名选择加载器。每个资源包有独立缓存，远程 URL 由 remote 加载器处理。
+ * 根据请求中的 bundle 名称选择加载器。每个 bundle 有独立缓存，远程 URL 由 remote 加载器处理。
  */
 export class ResManager {
 
     /**
-     * 远程资源加载器
+     * 远程加载器。请求中的 bundle 名称为 "remote" 时，由它按 URL 获取资源。
      */
     remote: Remote = new Remote();
 
     /**
-     * Resources Bundle
+     * 内置 resources 的框架 Bundle 实例。创建管理器时，如果引擎已打开它，就复用并登记。
      */
     resources?: Bundle;
 
     /**
-     * Main Bundle
+     * 内置 main 的框架 Bundle 实例，从引擎已打开的 main 初始化。
      */
     main?: Bundle;
 
     /**
-     * Internal Bundle
+     * 内置 internal 的框架 Bundle 实例，从引擎已打开的 internal 初始化。
      */
     internal?: Bundle;
 
     /**
-     * 按引擎返回的包名缓存 Bundle 包装对象，后续访问同一个包时复用它的资源缓存。
+     * 已打开的 bundle。键是引擎返回的名称，值是框架的 Bundle 对象，后续同名请求复用它。
      */
     bundles: Map<string, Bundle> = new Map();
 
