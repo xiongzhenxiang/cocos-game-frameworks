@@ -17,13 +17,13 @@ export abstract class Loader {
 
 
     /**
-     * 预加载资源
+     * 提前准备文件。已经有可用实例时直接返回空 items，其余情况由子类向引擎请求文件。
      */
     async preload<T extends cc.Asset>(res_path: ResPath<T>, opt?: ResPreloadOpt): Promise<ResPreloadReturnType> {
         let retry = opt?.retry !== false;
         let retry_time = opt?.retry_time || 500;
 
-        // check param
+        // 调用方没有传入 res_path 对象时，直接返回错误。
         if (!res_path) {
             console.error("[RES] 加载错误", "URL 无效");
             return { error: new Error("[RES] 加载错误"), items: null };
@@ -54,7 +54,7 @@ export abstract class Loader {
         let retry_time = opt?.retry_time || 500;
         let ref = opt?.ref !== false;
 
-        // check param
+        // 调用方没有传入 res_path 对象时，直接返回错误。
         if (!res_path) {
             console.error("[RES] 加载错误", "URL 无效");
             return { error: new Error("[RES] 加载错误"), resource: null };
@@ -88,7 +88,7 @@ export abstract class Loader {
 
 
     /**
-     * 打印日志信息，并返回 true
+     * 在重试判断中记录本次错误，是否继续由 retry 决定。
      */
     protected printLog(err: Error) {
         console.log("[RES] 加载错误", err);
@@ -109,7 +109,7 @@ export abstract class Loader {
 
 
     /**
-     * 检查资源是否已经缓存
+     * 先用类型（例如 cc.SpriteFrame）找到一张表，再按路径取 AssetInfo。命中时 info.asset 就是可复用的图片。
      */
     protected isCached(url: string, type: AssetClass<cc.Asset>) {
         let map = this.cached_map.get(type);
@@ -160,7 +160,7 @@ export abstract class Loader {
 
 
     /**
-     * 通过资源实例获取资源额外数据
+     * 按资源对象反查它的缓存记录。面板交还一张图片时，从这条记录读取并更新业务计数。
      */
     protected getAssetInfo(asset: cc.Asset) {
         return this.info_map.get(asset);
@@ -196,7 +196,7 @@ export abstract class Loader {
 
 
     /**
-     * 置零资源引用计数
+     * 直接把该缓存项的业务使用次数清零。force 释放会走这里，其他面板对这张图的计数也会被清掉。
      */
     refZero(res: cc.Asset): void;
     refZero(res_path: ResPath<cc.Asset>): void;
@@ -218,20 +218,20 @@ export abstract class Loader {
     release(res_path: ResPath<cc.Asset>, force?: boolean, imm?: boolean): void;
     release(res_or_res_path: cc.Asset | ResPath<cc.Asset>, force?: boolean, imm?: boolean) {
 
-        // 资源实例
+        // 传入图片对象时反查 info_map，传入路径和类型时查 cached_map，两种方式找到同一条记录。
         let info = res_or_res_path instanceof cc.Asset ? this.getAssetInfo(res_or_res_path) : this.isCached(res_or_res_path.url, res_or_res_path.type);
         if (!info) return;
 
         let asset = info.asset;
 
-        // 减少计数
+        // 正常关闭一个面板只减一次。另一个面板也在用图时，info.ref 仍大于零。
         if (force) {
             this.refZero(asset);
         } else {
             this.decRef(asset);
         }
 
-        // 立即释放
+        // imm 要求现在检查缓存。只有业务次数已经归零，才会交还缓存持有的引擎引用。
         if (imm) {
             if (info.ref == 0) {
                 this._release(info);
@@ -241,7 +241,7 @@ export abstract class Loader {
 
 
     /**
-     * 对所有资源引用计数减 1，仅持续引用才需调用此接口
+     * 遍历当前加载器的每条缓存记录，每项交还一次业务取用。卸载整个 bundle 时会传入 force 和 imm。
      * @param force 直接把计数清零，默认 false
      * @param imm 是否立即触发释放流程，默认为 false
      */
@@ -291,12 +291,12 @@ export abstract class Loader {
 
 
 /**
- * 资源额外数据类
+ * 一项资源在这个加载器里的缓存记录。按路径查找与按对象查找都指向同一条记录。
  */
 export class AssetInfo {
 
     /**
-     * 加载时传入的 URL
+     * 作为缓存键的路径。Bundle 使用 bundle 内路径，Remote 使用远程 URL。
      */
     url: string;
 
@@ -306,12 +306,12 @@ export class AssetInfo {
     type: AssetClass<cc.Asset>;
 
     /**
-     * 资源实例
+     * 已经加载好的引擎对象。再次命中时，调用方取得的就是这个对象。
      */
     asset: cc.Asset;
 
     /**
-     * 业务使用次数，初始为零。首次入缓存时取得的引擎引用单独由 cc.Asset 记录。
+     * 尚未交还的业务取用次数。两个面板各取一次后为 2，而缓存只在首次入缓存时调用一次 cc.Asset.addRef()。
      */
     ref: number;
 
@@ -350,7 +350,7 @@ export class ResLoadOpt {
     onProgress?: Function;
 
     /**
-     * 快捷参数：重试，500ms，并对资源引用计数 +1
+     * 请求成功后将业务使用次数加一。重试与间隔沿用加载方法的默认设置。
      */
     static readonly AddRef: ResLoadOpt = Object.freeze({ ref: true });
 }
@@ -373,20 +373,20 @@ export class ResPreloadOpt {
 
 
 /**
- * 获取资源函数的通用返回类型
+ * 单项加载的结果。error 为空时可从 resource 取得所请求类型的实例。
  */
 export type ResLoadReturnType<T extends cc.Asset> =
     | { error: null; resource: T }
     | { error: Error; resource: T | null };
 
 /**
- * 获取资源返回的通用类型
+ * 按路径数组加载的结果。resource 的索引和输入路径对应，未取得可用资源的位置可为 null。
  */
 export type ResLoadDirReturnType<T extends cc.Asset> = { error: Error | null; resource: (T | null)[] };
 
 
 /**
- * 获取资源函数的通用返回类型
+ * 预加载返回引擎请求项 items。需要给组件赋值时，应再正式加载，取得资源实例。
  */
 export type ResPreloadReturnType =
     | { error: null; items: cc.AssetManager.RequestItem[] }

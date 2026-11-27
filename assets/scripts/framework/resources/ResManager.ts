@@ -36,7 +36,7 @@ export class ResManager {
 
 
     constructor() {
-        // 引擎可能已经打开内置包。复用现有实例，使它们和自定义包使用同一个加载入口。
+        // 引擎可能已经打开内置 bundle。为现有对象创建框架 Bundle，后续与自定义 bundle 共用同一套查找流程。
         if (cc.assetManager.resources) {
             this.resources = new Bundle().init(cc.assetManager.resources);
             this.bundles.set("resources", this.resources);
@@ -55,7 +55,7 @@ export class ResManager {
 
 
     /**
-     * bundle 为 "remote" 时，url 是远程地址。其他请求先取得对应资源包，再按包内路径和类型加载。
+     * 先按名称找到加载器，再调用它继承的 Loader.load。普通图片用 bundle 内路径，选择 "remote" 时用完整 URL。
      */
     async load<T extends cc.Asset>(r_res: ResRoute<T>, opt?: ResLoadOpt): Promise<ResLoadReturnType<T>> {
         if (!r_res) return { error: new Error("缺少资源路由"), resource: null };
@@ -75,7 +75,7 @@ export class ResManager {
 
 
     /**
-     * 提前获取文件，并把本次重试设置传给分包加载。返回的请求项可用于确认预加载结果。
+     * 提前准备文件，把重试选项传给 loadBundle 和加载器。成功时 items 包含引擎请求项。
      */
     async preload<T extends cc.Asset>(r_res: ResRoute<T>, opt?: ResLoadOpt): Promise<ResPreloadReturnType> {
         if (!r_res) return { error: new Error("缺少资源路由"), items: null };
@@ -94,7 +94,7 @@ export class ResManager {
 
 
     /**
-     * 先取得资源包，再加载指定目录。省略类型时，引擎返回该目录下的各种资源。
+     * 先取得 bundle，再按相对路径加载目录。传入 cc.SpriteFrame 时只取图片帧，省略类型时由引擎返回目录中的各类资源。
      */
     loadDir<T extends cc.Asset>(dir_info: DirRoute, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
     loadDir<T extends cc.Asset>(r_dir: DirInfo, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
@@ -125,7 +125,7 @@ export class ResManager {
 
 
     /**
-     * 先取得资源包，再预加载目录中的文件。目录路径相对于该包。
+     * 取得 bundle 后，按 bundle 内的相对路径预加载目录。成功时返回请求项，正式加载时才登记取用。
      */
     preloadDir<T extends cc.Asset>(dir_info: DirRoute, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
     preloadDir<T extends cc.Asset>(r_dir: DirInfo, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
@@ -155,7 +155,7 @@ export class ResManager {
 
 
     /**
-     * 对目录下所有指定类型资源引用计数减 1，仅持续引用才需调用此接口
+     * 按目录路径找到已打开的 bundle，由它逐项交还匹配资源的业务引用。
      * @param force 直接把计数清零，默认 false
      * @param imm 是否立即触发释放流程，默认为 false
      */
@@ -183,8 +183,8 @@ export class ResManager {
 
 
     /**
-     * 通用资源释放函数，对资源引用计数减 1，仅持续引用时才需调用此接口
-     * @param imm 是否立即触发释放流程，默认为 false，只会减少计数
+     * 按 bundle 名称找到原加载器，传回资源对象，或用路径和类型找到对应缓存项，默认减一次业务使用。
+     * @param imm 为 true 时在本次释放中检查计数，归零就移出缓存。
      */
     release(r_res: ResRoute<cc.Asset>, force?: boolean, imm?: boolean): void;
     release(r_bundle: BundleRoute, res: cc.Asset, force?: boolean, imm?: boolean): void;
@@ -215,7 +215,7 @@ export class ResManager {
 
 
     /**
-     * 加载某个 Bundle
+     * 按名称或地址打开 bundle。先查已登记的框架 Bundle，成功返回的 bundle 可以继续加载图片。
      */
     loadBundle(name_or_url: string, opt?: BundleLoadOpt): Promise<BundleLoadReturnType>;
     loadBundle(r_bundle: BundleRoute, opt?: BundleLoadOpt): Promise<BundleLoadReturnType>;
@@ -223,7 +223,7 @@ export class ResManager {
         let retry = opt?.retry !== false;
         let retry_time = opt?.retry_time || 5000;
 
-        // check param
+        // 缺少名称或地址时直接返回错误。
         if (!name_or_url_or_r_bundle) {
             console.error("[RES] 加载错误", "Bundle NameOrUrl 无效");
             return { error: new Error("[RES] 加载错误"), bundle: null };
@@ -234,13 +234,13 @@ export class ResManager {
         let result: BundleLoadReturnType;
 
         do {
-            // is cached
+            // 此处查的是已打开的 bundle。单张图片的缓存要等进入 Loader.load 后再查。
             let bundle = this.isCached(bundle_name);
             if (bundle) {
                 return { error: null, bundle: bundle };
             }
 
-            // load
+            // 首次打开时等待引擎和依赖 bundle 就绪。
             result = await this._loadBundle(bundle_name, opt);
 
         } while (!result.bundle && this.printLog(result.error) && retry && (!await sleep(retry_time)));
@@ -250,7 +250,7 @@ export class ResManager {
 
 
     /**
-     * 打印日志信息，并返回 true
+     * 记录本次打开 bundle 的错误，交由 loadBundle 判断是否重试。
      */
     protected printLog(err: Error) {
         console.log("[RES] 加载错误", err);
@@ -259,7 +259,7 @@ export class ResManager {
 
 
     /**
-     * 加载 Bundle 核心函数
+     * 让 cc.assetManager 打开 bundle。若引擎报告了依赖，就等每个依赖打开成功，再返回当前的框架 Bundle。
      */
     protected _loadBundle(name_or_url: string, opt?: BundleLoadOpt): Promise<BundleLoadReturnType> {
         let version = opt?.version;
@@ -269,8 +269,8 @@ export class ResManager {
                 version: version,
             }, (err, assetbundle) => {
                 if (!err) {
-                    // 当前包可能引用其他包的素材。等依赖包全部可用后，再把当前包放入缓存。
-                    // 各包有各自的版本号，依赖包只继承重试设置。
+                    // 当前 bundle 的图片可能依赖其他 bundle。依赖列表中任何一项打开失败，这次打开就返回错误。
+                    // 每个 bundle 可以有自己的版本号，传给依赖的选项只包括重试开关和间隔。
                     if (assetbundle.deps.length !== 0) {
                         const promises = assetbundle.deps.map(v => this.loadBundle(v, opt ? { retry: opt.retry, retry_time: opt.retry_time } : undefined));
                         const results = Promise.all(promises);
@@ -301,7 +301,7 @@ export class ResManager {
 
 
     /**
-     * 检查 Bundle 是否已经缓存
+     * 按引擎返回的名称，在 bundles 表中查已打开的框架 Bundle。
      */
     protected isCached(name: string) {
         return this.bundles.get(name);
@@ -309,7 +309,7 @@ export class ResManager {
 
 
     /**
-     * 设置 Bundle 已经缓存
+     * 登记这个名称对应的框架 Bundle，后续同名请求可以直接复用。
      */
     protected setCached(name: string, instane: Bundle) {
         this.bundles.set(name, instane);
@@ -318,7 +318,7 @@ export class ResManager {
 
 
     /**
-     * 移除缓存 Bundle，并释放
+     * 从 bundles 表移除框架对象，并从引擎移除对应 bundle。资源缓存由调用方 releaseBundle 先清理。
      */
     protected removeCache(name: string) {
         let bundle = this.isCached(name);
@@ -330,7 +330,7 @@ export class ResManager {
 
 
     /**
-     * 卸载整个包前，清零包内资源的业务计数并交还缓存引用。单个面板关闭时应只交还它持有的资源。
+     * 卸载整个 bundle 时，先清零其中所有缓存项的业务计数、交还引擎引用，再移除 bundle。
      */
     releaseBundle(r_bundle: BundleRoute): void;
     releaseBundle(bundle: Bundle): void;
@@ -346,7 +346,7 @@ export class ResManager {
 
 
     /**
-     * 触发资源释放，若不提供 Bundle 名称，则会触发所有 Bundle 的资源释放
+     * 只清理业务使用次数已归零的缓存项。传名称时只扫描对应加载器，省略时检查所有 bundle 和远程缓存。
      */
     gc(r_bundle?: BundleRoute) {
         if (r_bundle) {
@@ -381,7 +381,7 @@ export class BundleLoadOpt {
     retry_time?: number;
 
     /**
-     * 加载指定 Version 的 Bundle
+     * 传给 cc.assetManager.loadBundle 的版本号，适用于本次要打开的 bundle。
      */
     version?: string;
 }
@@ -396,7 +396,7 @@ export type BundleLoadReturnType =
 
 
 /**
- * 记录资源或资源目录所在 bundle 与相对路径的对象
+ * 单项资源的位置和类型。普通资源填写 bundle 内的 url，远程资源使用 "remote" 和完整 URL。
  */
 export type ResRoute<T extends cc.Asset> = { bundle: string, url: string, type: AssetClass<T> };
 
@@ -420,6 +420,6 @@ export type DirRoute = { bundle: string, path: string };
 
 
 /**
- * 游戏资源管理
+ * 共享的 ResManager 实例。界面使用的 resLoader 会把加载请求转交给这里。
  */
 export const res = new ResManager();

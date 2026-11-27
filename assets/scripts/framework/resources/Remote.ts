@@ -23,11 +23,11 @@ export class Remote extends Loader {
 
 
     /**
-     * Cocos 远程预获取函数封装
+     * 通过 preloadAny 预取远程文件，返回引擎请求项 items。
      */
     protected _preload<T extends cc.Asset>(url: string, type: AssetClass<T>): Promise<ResPreloadReturnType> {
         return new Promise((resolve) => {
-            // 这段代码用于预加载远程资源，未经过测试
+            // __isNative__ 告诉引擎按原始文件处理这个 URL。此分支尚未在真实引擎中验证。
             cc.assetManager.preloadAny(url, { __isNative__: true, ext: type2Ext(type) }, (err, items) => {
                 resolve({ error: err, items: items });
             });

@@ -2,7 +2,7 @@ import { AssetClass, sleep } from "./ResourceTypes";
 import { Loader, ResLoadOpt, ResLoadReturnType, ResPreloadOpt, ResPreloadReturnType } from "./Loader";
 import type { DirInfo } from "./ResManager";
 
-/** 将包内路径交给 Cocos Bundle 读取，缓存和使用次数由继承的 Loader 管理。 */
+/** 框架的 Bundle 继承 Loader。缓存中找不到图片时，才通过 this.bundle 调用 Cocos 的加载方法。 */
 export class Bundle extends Loader {
 
     /**
@@ -17,7 +17,7 @@ export class Bundle extends Loader {
 
 
     /**
-     * 初始化
+     * 保存引擎已经打开的 bundle 和版本号，返回当前框架对象供 ResManager 登记。
      */
     init(bundle: cc.AssetManager.Bundle, version?: string) {
         this.bundle = bundle;
@@ -27,7 +27,7 @@ export class Bundle extends Loader {
 
 
     /**
-     * 预加载目录下所有指定类型资源
+     * 提前准备目录文件，成功时返回引擎请求项 items。显示图片时再调用 loadDir。
      */
     preloadDir<T extends cc.Asset>(dir_path: DirPath, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
     preloadDir<T extends cc.Asset>(r_dir: DirInfo, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
@@ -36,7 +36,7 @@ export class Bundle extends Loader {
     async preloadDir<T extends cc.Asset>(r_dir_or_dir_path: DirPath | DirInfo, type_or_opt?: AssetClass<T> | ResPreloadOpt, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType> {
         let type: AssetClass<T> | undefined;
 
-        // 矫正参数
+        // 第二个参数既可以是 cc.SpriteFrame 等资源类型，也可以是加载选项。
         cc.js.isChildClassOf(type_or_opt as AssetClass<T>, cc.Asset) ? (type = type_or_opt as AssetClass<T>) : (opt = type_or_opt as ResPreloadOpt);
 
         let dir_path: DirPath = (<DirInfo>r_dir_or_dir_path).DIR ?? r_dir_or_dir_path as DirPath;
@@ -54,7 +54,7 @@ export class Bundle extends Loader {
 
 
     /**
-     * 默认给目录加载成功后返回的每个资源各记一次引用，之后可以按实例逐项交还。
+     * 目录加载成功后，默认给返回的每个资源各加一次业务计数。即使某张图之前已被单独加载，这次目录取用也要计数。
      */
     loadDir<T extends cc.Asset>(dir_path: DirPath, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
     loadDir<T extends cc.Asset>(r_dir: DirInfo, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
@@ -63,7 +63,7 @@ export class Bundle extends Loader {
     async loadDir<T extends cc.Asset>(r_dir_or_dir_path: DirPath | DirInfo, type_or_opt?: AssetClass<T> | ResLoadOpt, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>> {
         let type: AssetClass<T> | undefined;
 
-        // 矫正参数
+        // 第二个参数既可以是 cc.SpriteFrame 等资源类型，也可以是加载选项。
         cc.js.isChildClassOf(type_or_opt as AssetClass<T>, cc.Asset) ? (type = type_or_opt as AssetClass<T>) : (opt = type_or_opt as ResLoadOpt);
 
         let dir_path: DirPath = (<DirInfo>r_dir_or_dir_path).DIR ?? r_dir_or_dir_path as DirPath;
@@ -88,9 +88,9 @@ export class Bundle extends Loader {
 
 
     /**
-     * 对目录下所有指定类型资源引用计数减 1，仅持续引用才需调用此接口
-     * @param force 直接把计数清零，默认 false
-     * @param imm 是否立即触发释放流程，默认为 false
+     * 按目录路径和可选的资源类型枚举条目，逐项在当前缓存中查找，命中就交还一次。
+     * @param force 为 true 时清零每项资源的全部业务计数，其他使用者也受影响。
+     * @param imm 为 true 时立即移除使用次数已归零的缓存项。
      */
     releaseDir(dir_path: DirPath, force?: boolean, imm?: boolean): void;
     releaseDir(r_dir: DirInfo, force?: boolean, imm?: boolean): void;
@@ -100,7 +100,7 @@ export class Bundle extends Loader {
         let type: AssetClass<cc.Asset> | undefined;
         let force: boolean | undefined;
 
-        // 矫正参数
+        // 传了资源类型时只匹配该类型，否则第二个参数就是强制清零开关。
         if (cc.js.isChildClassOf(type_or_force as AssetClass<cc.Asset>, cc.Asset)) {
             type = type_or_force as AssetClass<cc.Asset>;
             force = force_or_imm;
@@ -126,7 +126,7 @@ export class Bundle extends Loader {
 
 
     /**
-     * Cocos Bundle 目录资源预获取函数封装
+     * 调用引擎的 preloadDir。回调中的 items 是本次预加载的请求项。
      */
     protected _preloadDir<T extends cc.Asset>(path: string, type?: AssetClass<T>): Promise<ResDirPreloadReturnType> {
         return new Promise((resolve) => {
@@ -150,7 +150,7 @@ export class Bundle extends Loader {
 
 
     /**
-     * Cocos Bundle 目录资源获取函数封装
+     * 调用引擎的 loadDir，将返回的每项资源分别加入缓存，并将加载进度传给调用方。
      */
     protected _loadDir<T extends cc.Asset>(path: string, type?: AssetClass<T>, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>> {
         return new Promise((resolve) => {
@@ -160,7 +160,7 @@ export class Bundle extends Loader {
                 let onComplete = (err: Error, assets: T[]) => {
                     if (!err) {
                         for (const asset of assets) {
-                            // 目录请求只提供文件夹路径。用 UUID 查出每项的包内路径和类型，使单项请求也能命中缓存。
+                            // 目录请求只提供文件夹路径。用 UUID 查出每项在 bundle 中的路径和资源类型，使单项请求也能命中缓存。
                             let info = bundle.getAssetInfo((asset as T & { _uuid: string })._uuid) as CocosAssetInfo<T>;
                             let url = info.path;
                             this.isCached(url, info.ctor) || this.setCached(url, info.ctor, asset);
@@ -187,7 +187,7 @@ export class Bundle extends Loader {
 
 
     /**
-     * Cocos Bundle 资源预获取函数封装
+     * 调用引擎的 preload 准备单个文件。此阶段无需登记图片使用者。
      */
     protected _preload<T extends cc.Asset>(url: string, type: AssetClass<T>): Promise<ResPreloadReturnType> {
         return new Promise((resolve) => {
@@ -204,14 +204,14 @@ export class Bundle extends Loader {
 
 
     /**
-     * Cocos Bundle 资源获取函数封装
+     * 父类查不到缓存时调用这里。引擎返回图片后，用同一路径和类型保存图片，再把它交给父类登记使用次数。
      */
     protected _load<T extends cc.Asset>(url: string, type: AssetClass<T>): Promise<ResLoadReturnType<T>> {
         return new Promise((resolve) => {
             if (this.bundle) {
                 this.bundle.load(url, type as unknown as typeof cc.Asset, (err, asset: T) => {
                     if (!err) {
-                        // 等待引擎回调期间，另一请求可能已缓存同一资源。再次检查可避免重复增加引擎引用。
+                        // 两个面板可能同时请求同一张图。先返回的请求负责入缓存，后返回的复用该记录，缓存只持有一份引擎引用。
                         this.isCached(url, type) || this.setCached(url, type, asset);
                     }
                     resolve({ error: err, resource: asset });
@@ -241,7 +241,7 @@ export type ResDirPreloadReturnType = ResPreloadReturnType;
 
 
 /**
- * Cocos AssetInfo Type
+ * 引擎记录的资源信息。path 和 ctor 组成缓存键，uuid 标识引擎中的资源。
  */
 export type CocosAssetInfo<T extends cc.Asset> = { path: string, uuid: string, ctor: AssetClass<T> };
 

@@ -3,14 +3,15 @@ import { ResLoaderBase } from "./ResLoaderBase";
 import { BundleName } from "./ResourceTypes";
 import type { AssetClass } from "./ResourceTypes";
 
-/** 默认将战斗请求记在这个使用者名下，退出战斗时可按它交还整组引用。 */
+/** 战斗共用的使用者标识。它和 bundle 名称恰好同为 "battleScene"，这里用它决定退出时交还哪组资源。 */
 const battleTarget = "battleScene";
 
-/** 项目入口。通用的加载、使用者登记和释放方法继承自 ResLoaderBase。 */
+/** 界面通过 resLoader 调用这个类。战斗方法填好 bundle 名称，实际加载和按使用者释放的逻辑在父类 ResLoaderBase。 */
 export class ResLoader extends ResLoaderBase {
-    /** 模块导出的共享实例。直接 new ResLoader() 时会得到独立的使用者清单。 */
+    /** 保存各界面共用的实例。直接 new ResLoader() 会建立另一套使用者清单，底层仍共用 res 管理的缓存。 */
     private static instance?: ResLoader;
 
+    /** 首次调用时创建实例。以后从这里取得的对象与文件末尾导出的 resLoader 相同。 */
     static getIns(): ResLoader {
         if (!ResLoader.instance) {
             ResLoader.instance = new ResLoader();
@@ -18,12 +19,12 @@ export class ResLoader extends ResLoaderBase {
         return ResLoader.instance;
     }
 
-    /** 从战斗 bundle 取一项资源。独立关闭的面板可以传入自己的 target。 */
+    /** 从战斗 bundle 取一项资源。随战斗结束一起释放时用默认 target，要单独关闭的面板传自己的标识。 */
     loadResToBattleBundle<T extends cc.Asset>(url: string, type: AssetClass<T>, target = battleTarget, opt?: ResLoadOpt) {
         return this.loadResToBundle(BundleName.BATTLE_SCENE, url, type, target, opt);
     }
 
-    /** 并行取多项战斗资源，结果顺序与 urls 一致，引用登记在 battleTarget 名下。 */
+    /** 并行加载战斗资源，返回顺序与 urls 一致。默认登记在 battleTarget 名下，与单项加载共用释放入口。 */
     loadResArrayToBattleBundle<T extends cc.Asset>(urls: string[], type: AssetClass<T>, opt?: ResLoadOpt) {
         return this.loadResArrayToBundle(BundleName.BATTLE_SCENE, urls, type, battleTarget, opt);
     }
@@ -49,4 +50,5 @@ export class ResLoader extends ResLoaderBase {
     }
 }
 
+/** 面板导入的小写 resLoader 是 ResLoader 的实例，可直接调用它继承的通用方法。 */
 export const resLoader = ResLoader.getIns();
