@@ -1,4 +1,4 @@
-import { AssetClass } from "./ResourceTypes";
+import type { Class } from "../Type/PropType";
 import { Loader, ResLoadReturnType, ResPreloadReturnType } from "./Loader";
 
 
@@ -10,7 +10,7 @@ export class Remote extends Loader {
     /**
      * 把请求类型映射为引擎的 ext 参数，帮助引擎选择文件处理器。例如 cc.Texture2D 对应 .png。
      */
-    protected _load<T extends cc.Asset>(url: string, type: AssetClass<T>): Promise<ResLoadReturnType<T>> {
+    protected _load<T extends cc.Asset>(url: string, type: Class<T>): Promise<ResLoadReturnType<T>> {
         return new Promise((resolve) => {
             cc.assetManager.loadRemote(url, { ext: type2Ext(type) }, (err, asset: T) => {
                 if (!err) {
@@ -25,7 +25,7 @@ export class Remote extends Loader {
     /**
      * 通过 preloadAny 预取远程文件，返回引擎请求项 items。
      */
-    protected _preload<T extends cc.Asset>(url: string, type: AssetClass<T>): Promise<ResPreloadReturnType> {
+    protected _preload<T extends cc.Asset>(url: string, type: Class<T>): Promise<ResPreloadReturnType> {
         return new Promise((resolve) => {
             // __isNative__ 告诉引擎按原始文件处理这个 URL。此分支尚未在真实引擎中验证。
             cc.assetManager.preloadAny(url, { __isNative__: true, ext: type2Ext(type) }, (err, items) => {
@@ -40,7 +40,7 @@ export class Remote extends Loader {
 /**
  * 这里配置的是文件扩展名。loadRemote 最终返回的对象由 Cocos 对应的文件处理器创建。
  */
-export function type2Ext(type: AssetClass<cc.Asset>): string {
+export function type2Ext(type: Class<cc.Asset>): string {
     switch (type) {
         case cc.Texture2D:
             return ".png";
@@ -65,4 +65,4 @@ export function type2Ext(type: AssetClass<cc.Asset>): string {
 /**
  * 远程获取的资源支持类型
  */
-export type RemoteSupportType = AssetClass<cc.Texture2D> | AssetClass<cc.JsonAsset>;
+export type RemoteSupportType = Class<cc.Texture2D> | Class<cc.JsonAsset>;

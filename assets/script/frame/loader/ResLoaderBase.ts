@@ -1,7 +1,8 @@
-import type { ResDirLoadReturnType } from "./Bundle";
-import type { ResLoadDirReturnType, ResLoadOpt, ResLoadReturnType, ResPreloadReturnType } from "./Loader";
-import { res } from "./ResManager";
-import type { AssetClass } from "./ResourceTypes";
+import { Singleton } from "../../common/Singleton";
+import type { ResDirLoadReturnType } from "../res/Bundle";
+import type { ResLoadDirReturnType, ResLoadOpt, ResLoadReturnType, ResPreloadReturnType } from "../res/Loader";
+import { res } from "../res/ResManager";
+import type { Class } from "../Type/PropType";
 
 /** 一条记录对应一次需要交还的取用。同一张图片加载成功两次，清单里就有两条。 */
 type HeldAsset = {
@@ -18,7 +19,7 @@ type OwnerGroups = Map<string, HeldAsset[]>;
  * 管理界面动态加载的资源。target 由调用方指定，它决定哪些资源一起释放。
  * 同时打开两个背包面板时，分别给它们一个标识。关闭第一个面板，只传回第一个标识。
  */
-export class ResLoaderBase {
+export class ResLoaderBase extends Singleton {
     /** 单张或按数组加载的资源记在这里。面板关闭时，releaseResToBundle(target) 逐条交还。 */
     private readonly assets: OwnerGroups = new Map();
 
@@ -61,7 +62,7 @@ export class ResLoaderBase {
      * 成功时从 result.resource 取得图片帧。默认按 target 登记这次取用，关闭面板时传回同一个 target。
      * 传入 ref: false 会跳过这次业务计数和使用者登记，图片仍可进入加载器缓存。
      */
-    async loadResToBundle<T extends cc.Asset>(bundle: string, url: string, type: AssetClass<T>, target: string, opt?: ResLoadOpt): Promise<ResLoadReturnType<T>> {
+    async loadResToBundle<T extends cc.Asset>(bundle: string, url: string, type: Class<T>, target: string, opt?: ResLoadOpt): Promise<ResLoadReturnType<T>> {
         const group = opt?.ref !== false ? this.group(this.assets, target) : null;
         const result = await res.load({ bundle, url, type }, opt);
         if (group && !result.error && !this.record(this.assets, target, group, bundle, [result.resource])) {
@@ -71,7 +72,7 @@ export class ResLoaderBase {
     }
 
     /** 并行加载多项。resource[i] 对应 urls[i]，进度按实际完成的项数通知，单项失败也计入进度。 */
-    async loadResArrayToBundle<T extends cc.Asset>(bundle: string, urls: string[], type: AssetClass<T>, target: string, opt?: ResLoadOpt): Promise<ResLoadDirReturnType<T>> {
+    async loadResArrayToBundle<T extends cc.Asset>(bundle: string, urls: string[], type: Class<T>, target: string, opt?: ResLoadOpt): Promise<ResLoadDirReturnType<T>> {
         if (urls.length === 0) return { error: null, resource: [] };
         // 整批请求属于开始加载时的分组。回调可能在全部图片返回前关闭或重开面板。
         const group = opt?.ref !== false ? this.group(this.assets, target) : null;
@@ -92,7 +93,7 @@ export class ResLoaderBase {
     }
 
     /** 按实际返回的资源逐项登记，稍后用 releaseDirToBundle 交还这一组目录请求。 */
-    async loadDirToBundle<T extends cc.Asset>(bundle: string, path: string, type: AssetClass<T>, target: string, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>> {
+    async loadDirToBundle<T extends cc.Asset>(bundle: string, path: string, type: Class<T>, target: string, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>> {
         const group = opt?.ref !== false ? this.group(this.directories, target) : null;
         const result = await res.loadDir({ bundle, path }, type, opt);
         if (group && !result.error && !this.record(this.directories, target, group, bundle, result.resources)) {
@@ -102,12 +103,12 @@ export class ResLoaderBase {
     }
 
     /** 提前准备文件，返回引擎请求项 items。要把图片交给组件显示，再调用 loadResToBundle。 */
-    preLoadResToBundle<T extends cc.Asset>(bundle: string, url: string, type: AssetClass<T>, _target?: string) {
+    preLoadResToBundle<T extends cc.Asset>(bundle: string, url: string, type: Class<T>, _target?: string) {
         return res.preload({ bundle, url, type });
     }
 
     /** 按 urls 顺序预加载。某项失败就停止，items 里保留此前已取得的请求项。 */
-    async preLoadResArrayToBundle<T extends cc.Asset>(bundle: string, urls: string[], type: AssetClass<T>, _target?: string, opt?: ResLoadOpt): Promise<ResPreloadReturnType> {
+    async preLoadResArrayToBundle<T extends cc.Asset>(bundle: string, urls: string[], type: Class<T>, _target?: string, opt?: ResLoadOpt): Promise<ResPreloadReturnType> {
         const items: cc.AssetManager.RequestItem[] = [];
         for (const url of urls) {
             const result = await res.preload({ bundle, url, type }, opt);
@@ -119,7 +120,7 @@ export class ResLoaderBase {
     }
 
     /** 提前准备目录中指定类型的文件。预加载不会写入 directories，正式加载目录时才登记使用者。 */
-    preLoadDirToBundle<T extends cc.Asset>(bundle: string, path: string, type: AssetClass<T>, _target?: string, opt?: ResLoadOpt) {
+    preLoadDirToBundle<T extends cc.Asset>(bundle: string, path: string, type: Class<T>, _target?: string, opt?: ResLoadOpt) {
         return res.preloadDir({ bundle, path }, type, opt);
     }
 

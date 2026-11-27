@@ -9,5 +9,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["creator.d.ts", "assets/scripts/**/*.ts"]
+  "include": ["creator.d.ts", "assets/script/**/*.ts"]
 }

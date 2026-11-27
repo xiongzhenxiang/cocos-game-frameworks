@@ -1,6 +1,7 @@
-import { AssetClass, sleep } from "./ResourceTypes";
+import { sleep } from "../../common/Utils";
+import type { Class } from "../Type/PropType";
 import { Bundle, ResDirLoadReturnType, ResDirPreloadReturnType } from "./Bundle";
-import type { Loader, ResLoadOpt, ResLoadReturnType, ResPath, ResPreloadOpt, ResPreloadReturnType } from "./Loader";
+import type { ResLoadOpt, ResLoadReturnType, ResPath, ResPreloadOpt, ResPreloadReturnType } from "./Loader";
 import { Remote } from "./Remote";
 
 
@@ -98,9 +99,9 @@ export class ResManager {
      */
     loadDir<T extends cc.Asset>(dir_info: DirRoute, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
     loadDir<T extends cc.Asset>(r_dir: DirInfo, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
-    loadDir<T extends cc.Asset>(dir_info: DirRoute, type: AssetClass<T>, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
-    loadDir<T extends cc.Asset>(r_dir: DirInfo, type: AssetClass<T>, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
-    async loadDir<T extends cc.Asset>(dir_info_or_r_dir: DirRoute | DirInfo, type_or_opt?: AssetClass<T> | ResLoadOpt, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>> {
+    loadDir<T extends cc.Asset>(dir_info: DirRoute, type: Class<T>, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
+    loadDir<T extends cc.Asset>(r_dir: DirInfo, type: Class<T>, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
+    async loadDir<T extends cc.Asset>(dir_info_or_r_dir: DirRoute | DirInfo, type_or_opt?: Class<T> | ResLoadOpt, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>> {
         if (!dir_info_or_r_dir) return { error: new Error("缺少目录路由"), resources: null };
 
         let dir_info: DirRoute = (<DirInfo>dir_info_or_r_dir).DIR ?? dir_info_or_r_dir as DirRoute;
@@ -115,7 +116,7 @@ export class ResManager {
         let bundle = (await this.loadBundle(bundle_name, options)).bundle;
 
         if (bundle) {
-            return await bundle.loadDir(dir_info, type_or_opt as AssetClass<T>, opt);
+            return await bundle.loadDir(dir_info, type_or_opt as Class<T>, opt);
         } else {
             console.error("[RES] 加载错误", "无此 Bundle", bundle_name);
             return { error: new Error("[RES] 加载错误"), resources: null };
@@ -129,9 +130,9 @@ export class ResManager {
      */
     preloadDir<T extends cc.Asset>(dir_info: DirRoute, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
     preloadDir<T extends cc.Asset>(r_dir: DirInfo, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
-    preloadDir<T extends cc.Asset>(dir_info: DirRoute, type: AssetClass<T>, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
-    preloadDir<T extends cc.Asset>(r_dir: DirInfo, type: AssetClass<T>, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
-    async preloadDir<T extends cc.Asset>(dir_info_or_r_dir: DirRoute | DirInfo, type_or_opt?: AssetClass<T> | ResPreloadOpt, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType> {
+    preloadDir<T extends cc.Asset>(dir_info: DirRoute, type: Class<T>, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
+    preloadDir<T extends cc.Asset>(r_dir: DirInfo, type: Class<T>, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
+    async preloadDir<T extends cc.Asset>(dir_info_or_r_dir: DirRoute | DirInfo, type_or_opt?: Class<T> | ResPreloadOpt, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType> {
         if (!dir_info_or_r_dir) return { error: new Error("缺少目录路由"), items: null };
 
         let dir_info: DirRoute = (<DirInfo>dir_info_or_r_dir).DIR ?? dir_info_or_r_dir as DirRoute;
@@ -146,7 +147,7 @@ export class ResManager {
         let bundle = (await this.loadBundle(bundle_name, options)).bundle;
 
         if (bundle) {
-            return await bundle.preloadDir(dir_info, type_or_opt as AssetClass<T>, opt);
+            return await bundle.preloadDir(dir_info, type_or_opt as Class<T>, opt);
         } else {
             console.error("[RES] 加载错误", "无此 Bundle", bundle_name);
             return { error: new Error("[RES] 加载错误"), items: null };
@@ -161,9 +162,9 @@ export class ResManager {
      */
     releaseDir<T extends cc.Asset>(dir_info: DirRoute, force?: boolean, imm?: boolean): void;
     releaseDir<T extends cc.Asset>(r_dir: DirInfo, force?: boolean, imm?: boolean): void;
-    releaseDir<T extends cc.Asset>(dir_info: DirRoute, type: AssetClass<T>, force?: boolean, imm?: boolean): void;
-    releaseDir<T extends cc.Asset>(r_dir: DirInfo, type: AssetClass<T>, force?: boolean, imm?: boolean): void;
-    releaseDir<T extends cc.Asset>(dir_info_or_r_dir: DirRoute | DirInfo, type_or_force?: AssetClass<T> | boolean, force_or_imm?: boolean, imm?: boolean) {
+    releaseDir<T extends cc.Asset>(dir_info: DirRoute, type: Class<T>, force?: boolean, imm?: boolean): void;
+    releaseDir<T extends cc.Asset>(r_dir: DirInfo, type: Class<T>, force?: boolean, imm?: boolean): void;
+    releaseDir<T extends cc.Asset>(dir_info_or_r_dir: DirRoute | DirInfo, type_or_force?: Class<T> | boolean, force_or_imm?: boolean, imm?: boolean) {
         if (!dir_info_or_r_dir) return;
 
         let dir_info: DirRoute = (<DirInfo>dir_info_or_r_dir).DIR ?? dir_info_or_r_dir as DirRoute;
@@ -177,7 +178,7 @@ export class ResManager {
         let bundle = this.bundles.get(bundle_name);
 
         if (bundle) {
-            bundle.releaseDir(dir_info, type_or_force as AssetClass<T>, force_or_imm, imm);
+            bundle.releaseDir(dir_info, type_or_force as Class<T>, force_or_imm, imm);
         }
     }
 
@@ -398,7 +399,7 @@ export type BundleLoadReturnType =
 /**
  * 单项资源的位置和类型。普通资源填写 bundle 内的 url，远程资源使用 "remote" 和完整 URL。
  */
-export type ResRoute<T extends cc.Asset> = { bundle: string, url: string, type: AssetClass<T> };
+export type ResRoute<T extends cc.Asset> = { bundle: string, url: string, type: Class<T> };
 
 
 /**

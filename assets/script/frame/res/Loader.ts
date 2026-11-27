@@ -1,4 +1,5 @@
-import { AssetClass, sleep } from "./ResourceTypes";
+import { sleep } from "../../common/Utils";
+import type { Class } from "../Type/PropType";
 
 /**
  * Bundle 和 Remote 共用的资源缓存。每个加载器分别记录自己缓存了哪些资源、每份资源被取用了几次。
@@ -8,7 +9,7 @@ export abstract class Loader {
     /**
      * 按资源类型、路径两级查找 AssetInfo。同一路径的 Texture2D 和 SpriteFrame 各有一条记录。
      */
-    cached_map: Map<AssetClass<cc.Asset>, Map<string, AssetInfo>> = new Map();
+    cached_map: Map<Class<cc.Asset>, Map<string, AssetInfo>> = new Map();
 
     /**
      * 用资源实例反查同一条 AssetInfo。调用方按对象释放时，用这张表找到要减的业务计数。
@@ -99,19 +100,19 @@ export abstract class Loader {
     /**
      * 子类向引擎发起文件预加载，返回请求项。使用者需要资源实例时再调用 load。
      */
-    protected abstract _preload<T extends cc.Asset>(url: string, type: AssetClass<T>): Promise<ResPreloadReturnType>;
+    protected abstract _preload<T extends cc.Asset>(url: string, type: Class<T>): Promise<ResPreloadReturnType>;
 
 
     /**
      * 子类取得资源实例后再次检查缓存，首次入缓存时调用 setCached。
      */
-    protected abstract _load<T extends cc.Asset>(url: string, type: AssetClass<T>): Promise<ResLoadReturnType<T>>;
+    protected abstract _load<T extends cc.Asset>(url: string, type: Class<T>): Promise<ResLoadReturnType<T>>;
 
 
     /**
      * 先用类型（例如 cc.SpriteFrame）找到一张表，再按路径取 AssetInfo。命中时 info.asset 就是可复用的图片。
      */
-    protected isCached(url: string, type: AssetClass<cc.Asset>) {
+    protected isCached(url: string, type: Class<cc.Asset>) {
         let map = this.cached_map.get(type);
         if (map) {
             return map.get(url);
@@ -124,7 +125,7 @@ export abstract class Loader {
     /**
      * 首次入缓存时，加载器通过 asset.addRef() 持有一份引擎引用。面板的使用次数另记在 AssetInfo.ref。
      */
-    protected setCached(url: string, type: AssetClass<cc.Asset>, instane: cc.Asset) {
+    protected setCached(url: string, type: Class<cc.Asset>, instane: cc.Asset) {
         let map = this.cached_map.get(type);
         if (!map) {
             this.cached_map.set(type, map = new Map());
@@ -142,7 +143,7 @@ export abstract class Loader {
     /**
      * 移除两处索引，再用 asset.decRef() 交还缓存持有的引擎引用。引擎会检查是否还有其他持有者。
      */
-    protected removeCache(url: string, type: AssetClass<cc.Asset>) {
+    protected removeCache(url: string, type: Class<cc.Asset>) {
         let map = this.cached_map.get(type);
         if (!map) {
             return null;
@@ -303,7 +304,7 @@ export class AssetInfo {
     /**
      * 与 URL 共同构成缓存键的资源类型，例如 cc.SpriteFrame。
      */
-    type: AssetClass<cc.Asset>;
+    type: Class<cc.Asset>;
 
     /**
      * 已经加载好的引擎对象。再次命中时，调用方取得的就是这个对象。
@@ -315,7 +316,7 @@ export class AssetInfo {
      */
     ref: number;
 
-    constructor(url: string, type: AssetClass<cc.Asset>, asset: cc.Asset) {
+    constructor(url: string, type: Class<cc.Asset>, asset: cc.Asset) {
         this.url = url;
         this.type = type;
         this.asset = asset;
@@ -396,4 +397,4 @@ export type ResPreloadReturnType =
 /**
  * 记录资源相对路径的对象
  */
-export type ResPath<T extends cc.Asset> = { url: string, type: AssetClass<T> };
+export type ResPath<T extends cc.Asset> = { url: string, type: Class<T> };

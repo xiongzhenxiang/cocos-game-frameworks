@@ -1,4 +1,5 @@
-import { AssetClass, sleep } from "./ResourceTypes";
+import { sleep } from "../../common/Utils";
+import type { Class } from "../Type/PropType";
 import { Loader, ResLoadOpt, ResLoadReturnType, ResPreloadOpt, ResPreloadReturnType } from "./Loader";
 import type { DirInfo } from "./ResManager";
 
@@ -31,13 +32,13 @@ export class Bundle extends Loader {
      */
     preloadDir<T extends cc.Asset>(dir_path: DirPath, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
     preloadDir<T extends cc.Asset>(r_dir: DirInfo, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
-    preloadDir<T extends cc.Asset>(dir_path: DirPath, type: AssetClass<T>, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
-    preloadDir<T extends cc.Asset>(r_dir: DirInfo, type: AssetClass<T>, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
-    async preloadDir<T extends cc.Asset>(r_dir_or_dir_path: DirPath | DirInfo, type_or_opt?: AssetClass<T> | ResPreloadOpt, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType> {
-        let type: AssetClass<T> | undefined;
+    preloadDir<T extends cc.Asset>(dir_path: DirPath, type: Class<T>, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
+    preloadDir<T extends cc.Asset>(r_dir: DirInfo, type: Class<T>, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType>;
+    async preloadDir<T extends cc.Asset>(r_dir_or_dir_path: DirPath | DirInfo, type_or_opt?: Class<T> | ResPreloadOpt, opt?: ResPreloadOpt): Promise<ResDirPreloadReturnType> {
+        let type: Class<T> | undefined;
 
         // 第二个参数既可以是 cc.SpriteFrame 等资源类型，也可以是加载选项。
-        cc.js.isChildClassOf(type_or_opt as AssetClass<T>, cc.Asset) ? (type = type_or_opt as AssetClass<T>) : (opt = type_or_opt as ResPreloadOpt);
+        cc.js.isChildClassOf(type_or_opt as Class<T>, cc.Asset) ? (type = type_or_opt as Class<T>) : (opt = type_or_opt as ResPreloadOpt);
 
         let dir_path: DirPath = (<DirInfo>r_dir_or_dir_path).DIR ?? r_dir_or_dir_path as DirPath;
         let retry = opt?.retry !== false;
@@ -58,13 +59,13 @@ export class Bundle extends Loader {
      */
     loadDir<T extends cc.Asset>(dir_path: DirPath, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
     loadDir<T extends cc.Asset>(r_dir: DirInfo, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
-    loadDir<T extends cc.Asset>(dir_path: DirPath, type: AssetClass<T>, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
-    loadDir<T extends cc.Asset>(r_dir: DirInfo, type: AssetClass<T>, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
-    async loadDir<T extends cc.Asset>(r_dir_or_dir_path: DirPath | DirInfo, type_or_opt?: AssetClass<T> | ResLoadOpt, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>> {
-        let type: AssetClass<T> | undefined;
+    loadDir<T extends cc.Asset>(dir_path: DirPath, type: Class<T>, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
+    loadDir<T extends cc.Asset>(r_dir: DirInfo, type: Class<T>, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>>;
+    async loadDir<T extends cc.Asset>(r_dir_or_dir_path: DirPath | DirInfo, type_or_opt?: Class<T> | ResLoadOpt, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>> {
+        let type: Class<T> | undefined;
 
         // 第二个参数既可以是 cc.SpriteFrame 等资源类型，也可以是加载选项。
-        cc.js.isChildClassOf(type_or_opt as AssetClass<T>, cc.Asset) ? (type = type_or_opt as AssetClass<T>) : (opt = type_or_opt as ResLoadOpt);
+        cc.js.isChildClassOf(type_or_opt as Class<T>, cc.Asset) ? (type = type_or_opt as Class<T>) : (opt = type_or_opt as ResLoadOpt);
 
         let dir_path: DirPath = (<DirInfo>r_dir_or_dir_path).DIR ?? r_dir_or_dir_path as DirPath;
         let retry = opt?.retry !== false;
@@ -94,15 +95,15 @@ export class Bundle extends Loader {
      */
     releaseDir(dir_path: DirPath, force?: boolean, imm?: boolean): void;
     releaseDir(r_dir: DirInfo, force?: boolean, imm?: boolean): void;
-    releaseDir(dir_path: DirPath, type: AssetClass<cc.Asset>, force?: boolean, imm?: boolean): void;
-    releaseDir(r_dir: DirInfo, type: AssetClass<cc.Asset>, force?: boolean, imm?: boolean): void;
-    releaseDir(r_dir_or_dir_path: DirPath | DirInfo, type_or_force?: AssetClass<cc.Asset> | boolean, force_or_imm?: boolean, imm?: boolean) {
-        let type: AssetClass<cc.Asset> | undefined;
+    releaseDir(dir_path: DirPath, type: Class<cc.Asset>, force?: boolean, imm?: boolean): void;
+    releaseDir(r_dir: DirInfo, type: Class<cc.Asset>, force?: boolean, imm?: boolean): void;
+    releaseDir(r_dir_or_dir_path: DirPath | DirInfo, type_or_force?: Class<cc.Asset> | boolean, force_or_imm?: boolean, imm?: boolean) {
+        let type: Class<cc.Asset> | undefined;
         let force: boolean | undefined;
 
         // 传了资源类型时只匹配该类型，否则第二个参数就是强制清零开关。
-        if (cc.js.isChildClassOf(type_or_force as AssetClass<cc.Asset>, cc.Asset)) {
-            type = type_or_force as AssetClass<cc.Asset>;
+        if (cc.js.isChildClassOf(type_or_force as Class<cc.Asset>, cc.Asset)) {
+            type = type_or_force as Class<cc.Asset>;
             force = force_or_imm;
         } else {
             force = type_or_force as boolean;
@@ -128,7 +129,7 @@ export class Bundle extends Loader {
     /**
      * 调用引擎的 preloadDir。回调中的 items 是本次预加载的请求项。
      */
-    protected _preloadDir<T extends cc.Asset>(path: string, type?: AssetClass<T>): Promise<ResDirPreloadReturnType> {
+    protected _preloadDir<T extends cc.Asset>(path: string, type?: Class<T>): Promise<ResDirPreloadReturnType> {
         return new Promise((resolve) => {
             if (this.bundle) {
 
@@ -152,7 +153,7 @@ export class Bundle extends Loader {
     /**
      * 调用引擎的 loadDir，将返回的每项资源分别加入缓存，并将加载进度传给调用方。
      */
-    protected _loadDir<T extends cc.Asset>(path: string, type?: AssetClass<T>, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>> {
+    protected _loadDir<T extends cc.Asset>(path: string, type?: Class<T>, opt?: ResLoadOpt): Promise<ResDirLoadReturnType<T>> {
         return new Promise((resolve) => {
             const bundle = this.bundle;
             if (bundle) {
@@ -189,7 +190,7 @@ export class Bundle extends Loader {
     /**
      * 调用引擎的 preload 准备单个文件。此阶段无需登记图片使用者。
      */
-    protected _preload<T extends cc.Asset>(url: string, type: AssetClass<T>): Promise<ResPreloadReturnType> {
+    protected _preload<T extends cc.Asset>(url: string, type: Class<T>): Promise<ResPreloadReturnType> {
         return new Promise((resolve) => {
             if (this.bundle) {
                 this.bundle.preload(url, type as unknown as typeof cc.Asset, (err, items) => {
@@ -206,7 +207,7 @@ export class Bundle extends Loader {
     /**
      * 父类查不到缓存时调用这里。引擎返回图片后，用同一路径和类型保存图片，再把它交给父类登记使用次数。
      */
-    protected _load<T extends cc.Asset>(url: string, type: AssetClass<T>): Promise<ResLoadReturnType<T>> {
+    protected _load<T extends cc.Asset>(url: string, type: Class<T>): Promise<ResLoadReturnType<T>> {
         return new Promise((resolve) => {
             if (this.bundle) {
                 this.bundle.load(url, type as unknown as typeof cc.Asset, (err, asset: T) => {
@@ -243,7 +244,7 @@ export type ResDirPreloadReturnType = ResPreloadReturnType;
 /**
  * 引擎记录的资源信息。path 和 ctor 组成缓存键，uuid 标识引擎中的资源。
  */
-export type CocosAssetInfo<T extends cc.Asset> = { path: string, uuid: string, ctor: AssetClass<T> };
+export type CocosAssetInfo<T extends cc.Asset> = { path: string, uuid: string, ctor: Class<T> };
 
 
 /**
